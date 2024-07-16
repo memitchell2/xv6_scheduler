@@ -1,3 +1,8 @@
+#ifndef _DEFS_H_
+#define _DEFS_H_
+
+#include "pstat.h"  // Ensure pstat.h is included
+
 struct buf;
 struct context;
 struct file;
@@ -109,7 +114,7 @@ int             fork(void);
 int             growproc(int);
 int             kill(int);
 struct cpu*     mycpu(void);
-struct proc*    myproc();
+struct proc*    myproc(void);
 void            pinit(void);
 void            procdump(void);
 void            scheduler(void) __attribute__((noreturn));
@@ -120,6 +125,9 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
+int             settickets(int pid, int tickets);
+int             srand(uint seed);
+int             getpinfo(struct pstat *p);
 
 // swtch.S
 void            swtch(struct context**, struct context*);
@@ -188,3 +196,5 @@ void            clearpteu(pde_t *pgdir, char *uva);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+
+#endif // _DEFS_H_

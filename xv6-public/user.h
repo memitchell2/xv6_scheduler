@@ -1,3 +1,8 @@
+#ifndef _USER_H_
+#define _USER_H_
+
+#include "pstat.h"  // Include pstat.h to ensure pstat structure is defined
+
 struct stat;
 struct rtcdate;
 
@@ -24,6 +29,11 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 
+// Add new system calls
+int settickets(int pid, int tickets);
+int srand(uint seed);
+int getpinfo(struct pstat *p);
+
 // ulib.c
 int stat(const char*, struct stat*);
 char* strcpy(char*, const char*);
@@ -37,3 +47,5 @@ void* memset(void*, int, uint);
 void* malloc(uint);
 void free(void*);
 int atoi(const char*);
+
+#endif // _USER_H_

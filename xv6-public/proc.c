@@ -99,6 +99,7 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  p->tickets = 1;  // Initialize tickets for new process
 
   release(&ptable.lock);
 
@@ -125,6 +126,7 @@ found:
 
   return p;
 }
+
 
 //PAGEBREAK: 32
 // Set up first user process.
@@ -220,6 +222,7 @@ fork(void)
   np->cwd = idup(curproc->cwd);
 
   safestrcpy(np->name, curproc->name, sizeof(curproc->name));
+  np->tickets = curproc->tickets;  // Inherit tickets from parent
 
   pid = np->pid;
 
@@ -231,6 +234,7 @@ fork(void)
 
   return pid;
 }
+
 
 // Exit the current process.  Does not return.
 // An exited process remains in the zombie state
@@ -333,7 +337,7 @@ wait(void)
 void
 scheduler(void) {
   struct proc *p;
-  struct proc *chosen_proc = NULL;  // Initialize chosen_proc to NULL
+  struct proc *chosen_proc = NULL;
   int total_tickets, winning_ticket, current_ticket;
 
   for(;;) {
@@ -346,9 +350,12 @@ scheduler(void) {
     // Calculate the total number of tickets
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
       if(p->state == RUNNABLE) {
+        cprintf("Process %d is RUNNABLE with %d tickets\n", p->pid, p->tickets);
         total_tickets += (p->tickets * (p->boostsleft > 0 ? 2 : 1));
       }
     }
+
+    cprintf("Total tickets: %d\n", total_tickets);
 
     if(total_tickets > 0) {
       // Hold the lottery
@@ -378,6 +385,7 @@ scheduler(void) {
         // to release ptable.lock and then reacquire it
         // before jumping back to us.
         struct cpu *c = mycpu();
+        cprintf("Switching to process %d\n", p->pid);
         c->proc = p;
         switchuvm(p);
         p->state = RUNNING;
@@ -393,6 +401,7 @@ scheduler(void) {
     release(&ptable.lock);
   }
 }
+
 
 
 
@@ -455,9 +464,8 @@ forkret(void)
 
 // Atomically release lock and sleep on chan.
 // Reacquires lock when awakened.
-void
-sleep(void *chan, struct spinlock *lk)
-{
+void 
+sleep(void *chan, struct spinlock *lk) {
   struct proc *p = myproc();
   
   if(p == 0)
@@ -466,34 +474,28 @@ sleep(void *chan, struct spinlock *lk)
   if(lk == 0)
     panic("sleep without lk");
 
-  // Must acquire ptable.lock in order to
-  // change p->state and then call sched.
-  // Once we hold ptable.lock, we can be
-  // guaranteed that we won't miss any wakeup
-  // (wakeup runs with ptable.lock locked),
-  // so it's okay to release lk.
-  if(lk != &ptable.lock){  //DOC: sleeplock0
-    acquire(&ptable.lock);  //DOC: sleeplock1
-    if(lk != &ptable.lock){  // DOC: sleeplock2
-      release(lk);
-    }
+  if(lk != &ptable.lock) {
+    acquire(&ptable.lock);
+    release(lk);
   }
+
   // Go to sleep.
+  cprintf("Process %d is sleeping on channel %p\n", p->pid, chan);
   p->chan = chan;
   p->state = SLEEPING;
-  p->sleepticks = 0;
-
   sched();
 
   // Tidy up.
   p->chan = 0;
 
   // Reacquire original lock.
-  if(lk != &ptable.lock){  //DOC: sleeplock2
-    // release(&ptable.lock);
+  if(lk != &ptable.lock) {
+    release(&ptable.lock);
     acquire(lk);
   }
 }
+
+
 
 //PAGEBREAK!
 // Wake up all processes sleeping on chan.
@@ -603,12 +605,17 @@ int sys_settickets(void) {
 }
 
 // srand system call
-void sys_srand(void) {
+int sys_srand(void) {
   uint seed;
-  if(argint(0, (int*)&seed) < 0)
-    return;
+  if (argint(0, (int*)&seed) < 0) {
+    cprintf("srand: invalid argument\n");
+    return -1;
+  }
+  cprintf("srand: setting seed to %d\n", seed);
   rseed = seed;
+  return 0;
 }
+
 
 // getpinfo system call
 int sys_getpinfo(void) {
