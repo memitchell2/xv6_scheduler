@@ -202,7 +202,7 @@ fork(void)
     return -1;
   }
 
-  // Copy process state from proc.
+  // Copy process state from p.
   if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
     kfree(np->kstack);
     np->kstack = 0;
@@ -213,8 +213,8 @@ fork(void)
   np->parent = curproc;
   *np->tf = *curproc->tf;
 
-  // Clear %eax so that fork returns 0 in the child.
-  np->tf->eax = 0;
+  // Set up new process to start executing at forkret.
+  np->tf->eax = 0;  // fork return value
 
   for(i = 0; i < NOFILE; i++)
     if(curproc->ofile[i])
@@ -222,9 +222,11 @@ fork(void)
   np->cwd = idup(curproc->cwd);
 
   safestrcpy(np->name, curproc->name, sizeof(curproc->name));
-  np->tickets = curproc->tickets;  // Inherit tickets from parent
 
   pid = np->pid;
+
+  // Copy tickets from parent to child.
+  np->tickets = curproc->tickets; 
 
   acquire(&ptable.lock);
 
@@ -234,6 +236,7 @@ fork(void)
 
   return pid;
 }
+
 
 
 // Exit the current process.  Does not return.
@@ -356,15 +359,16 @@ scheduler(void) {
 
     if(total_tickets > 0) {
       // Hold the lottery
+      cprintf("Total tickets: %d\n", total_tickets);
       winning_ticket = rand() % total_tickets;
+      cprintf("Winning ticket: %d\n", winning_ticket);
       current_ticket = 0;
-
-      // Find the winning process
       for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
         if(p->state == RUNNABLE) {
           current_ticket += (p->tickets * (p->boostsleft > 0 ? 2 : 1));
           if(current_ticket > winning_ticket) {
             chosen_proc = p;
+            cprintf("Selected process %d with %d tickets\n", p->pid, p->tickets);
             break;
           }
         }
@@ -378,7 +382,9 @@ scheduler(void) {
           p->boostsleft--;
         }
 
-        // Switch to chosen process
+        // Switch to chosen process. It is the process's job
+        // to release ptable.lock and then reacquire it
+        // before jumping back to us.
         struct cpu *c = mycpu();
         c->proc = p;
         switchuvm(p);
@@ -395,6 +401,7 @@ scheduler(void) {
     release(&ptable.lock);
   }
 }
+
 
 
 
@@ -501,6 +508,7 @@ wakeup1(void *chan) {
     if(p->state == SLEEPING && p->chan == chan) {
       p->state = RUNNABLE;
       p->boostsleft = p->sleepticks * 2; // Set the boost ticks
+      cprintf("Process %d woke up, boostsleft: %d\n", p->pid, p->boostsleft);
     }
   }
 }
