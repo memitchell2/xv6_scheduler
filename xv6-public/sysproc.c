@@ -57,23 +57,24 @@ sys_sbrk(void)
 }
 
 int
-sys_sleep(void)
-{
+sys_sleep(void) {
   int n;
   uint ticks0;
 
   if(argint(0, &n) < 0)
     return -1;
+
   acquire(&tickslock);
   ticks0 = ticks;
-  while(ticks - ticks0 < n){
-    if(myproc()->killed){
+  cprintf("Process %d going to sleep for %d ticks\n", myproc()->pid, n);
+  while(ticks - ticks0 < n) {
+    if(myproc()->killed) {
       release(&tickslock);
       return -1;
     }
-    myproc()->sleepticks++;
     sleep(&ticks, &tickslock);
   }
+  cprintf("Process %d woke up after sleeping for %d ticks\n", myproc()->pid, n);
   release(&tickslock);
   return 0;
 }

@@ -353,9 +353,12 @@ scheduler(void) {
     // Calculate the total number of tickets
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
       if(p->state == RUNNABLE) {
+        cprintf("Process %d is RUNNABLE with %d tickets\n", p->pid, p->tickets);
         total_tickets += (p->tickets * (p->boostsleft > 0 ? 2 : 1));
       }
     }
+
+    cprintf("Total tickets: %d\n", total_tickets);
 
     if(total_tickets > 0) {
       // Hold the lottery
@@ -386,6 +389,7 @@ scheduler(void) {
         // to release ptable.lock and then reacquire it
         // before jumping back to us.
         struct cpu *c = mycpu();
+        cprintf("Switching to process %d\n", p->pid);
         c->proc = p;
         switchuvm(p);
         p->state = RUNNING;
@@ -481,14 +485,15 @@ sleep(void *chan, struct spinlock *lk) {
   }
 
   // Go to sleep.
+  cprintf("Process %d is sleeping on channel %p\n", p->pid, chan);
   p->chan = chan;
   p->state = SLEEPING;
-  p->sleepticks = 0;  // Reset sleepticks
   sched();
 
   // Tidy up.
   p->chan = 0;
 
+  // Reacquire original lock.
   if(lk != &ptable.lock) {
     release(&ptable.lock);
     acquire(lk);
@@ -500,8 +505,9 @@ sleep(void *chan, struct spinlock *lk) {
 //PAGEBREAK!
 // Wake up all processes sleeping on chan.
 // The ptable lock must be held.
-void
-wakeup1(void *chan) {
+static void
+wakeup1(void *chan)
+{
   struct proc *p;
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
